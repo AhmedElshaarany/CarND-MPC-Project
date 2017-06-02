@@ -9,6 +9,8 @@
 #include "MPC.h"
 #include "json.hpp"
 
+#define POLY_ORDER 3
+
 // for convenience
 using json = nlohmann::json;
 
@@ -41,6 +43,15 @@ double polyeval(Eigen::VectorXd coeffs, double x) {
   return result;
 }
 
+// Evaluate derivative of a polynomial
+double polydereval(Eigen::VectorXd coeffs, double x){
+  double result = 0.0;
+  for(int i = 1; i < coeffs.size(); i++){
+    result += coeffs[i] * i * pow(x, i-1);
+  }
+  return result;
+}
+
 // Fit a polynomial.
 // Adapted from
 // https://github.com/JuliaMath/Polynomials.jl/blob/master/src/Polynomials.jl#L676-L716
@@ -65,13 +76,29 @@ Eigen::VectorXd polyfit(Eigen::VectorXd xvals, Eigen::VectorXd yvals,
   return result;
 }
 
+// Coordinate Transformation from map to car
+void transformToCarCoordinates(vector<double>& ptsx,vector<double>& ptsy, vector<double>& next_x_vals, vector<double>& next_y_vals, double px, double py, double psi){
+
+  for(uint i = 0; i < ptsx.size(); i++){
+    next_x_vals.push_back( (ptsx[i]-px) * cos(psi) + (ptsy[i]-py) * sin(psi));
+    next_y_vals.push_back( (ptsy[i]-py) * cos(psi) - (ptsx[i]-px) * sin(psi));
+  }
+  
+}
+
 int main() {
   uWS::Hub h;
 
   // MPC is initialized here!
   MPC mpc;
 
-  h.onMessage([&mpc](uWS::WebSocket<uWS::SERVER> ws, char *data, size_t length,
+  // define the state vector
+  Eigen::VectorXd state(6);
+
+  // state init flag
+  bool is_state_init = false;
+  
+  h.onMessage([&mpc, &state, &is_state_init](uWS::WebSocket<uWS::SERVER> ws, char *data, size_t length,
                      uWS::OpCode opCode) {
     // "42" at the start of the message means there's a websocket message event.
     // The 4 signifies a websocket message
@@ -87,10 +114,61 @@ int main() {
           // j[1] is the data JSON object
           vector<double> ptsx = j[1]["ptsx"];
           vector<double> ptsy = j[1]["ptsy"];
+
+	  Eigen::VectorXd ptsx_vec(ptsx.size());
+	  Eigen::VectorXd ptsy_vec(ptsy.size());
+
           double px = j[1]["x"];
           double py = j[1]["y"];
           double psi = j[1]["psi"];
           double v = j[1]["speed"];
+
+	  //Display the waypoints/reference line
+          vector<double> next_x_vals;
+          vector<double> next_y_vals;
+	  
+          //.. add (x,y) points to list here, points are in reference to the vehicle's coordinate system
+          // the points in the simulator are connected by a Yellow line
+	  transformToCarCoordinates(ptsx, ptsy, next_x_vals, next_y_vals, px, py, psi);
+	  
+	  // convert to VectorXd for polyfit
+	  for(uint i = 0; i < next_x_vals.size(); i++){
+	    ptsx_vec[i] = next_x_vals[i];
+	    ptsy_vec[i] = next_y_vals[i];
+	  }
+
+	  // Fit x and y points to a polynomial
+	  auto coeffs = polyfit(ptsx_vec, ptsy_vec, POLY_ORDER);
+
+	  // calculate cte
+	  //double cte = polyeval(coeffs, px) - py;
+	  double cte = polyeval(coeffs, 0);
+
+	  // calculate epsi
+	  double epsi = epsi = psi - atan(polydereval(coeffs, 0));
+	  //double epsi = epsi = atan(polydereval(coeffs, 0));
+
+	  /*
+	  if( !is_state_init ){
+	    state << px, py, psi, v, cte, epsi;
+	    is_state_init = true;
+	  }
+	  */
+	  
+	  //state << 0, 0, 0, v, cte, epsi;
+	  state << 0, 0, 0, v, cte, epsi;
+	  
+
+          //Display the MPC predicted trajectory 
+          vector<double> mpc_x_vals;
+          vector<double> mpc_y_vals;
+	  
+	  // Solve the mpc optimization problem
+	  auto vars = mpc.Solve(state, coeffs, mpc_x_vals, mpc_y_vals);
+
+	  // store new state
+	  //state << vars[0], vars[1], vars[2], vars[3], vars[4], vars[5];
+
 
           /*
           * TODO: Calculate steeering angle and throttle using MPC.
@@ -98,8 +176,9 @@ int main() {
           * Both are in between [-1, 1].
           *
           */
-          double steer_value;
-          double throttle_value;
+
+          double steer_value = vars[6];
+          double throttle_value = vars[7];
 
           json msgJson;
           // NOTE: Remember to divide by deg2rad(25) before you send the steering value back.
@@ -107,23 +186,10 @@ int main() {
           msgJson["steering_angle"] = steer_value;
           msgJson["throttle"] = throttle_value;
 
-          //Display the MPC predicted trajectory 
-          vector<double> mpc_x_vals;
-          vector<double> mpc_y_vals;
-
-          //.. add (x,y) points to list here, points are in reference to the vehicle's coordinate system
-          // the points in the simulator are connected by a Green line
-
           msgJson["mpc_x"] = mpc_x_vals;
           msgJson["mpc_y"] = mpc_y_vals;
 
-          //Display the waypoints/reference line
-          vector<double> next_x_vals;
-          vector<double> next_y_vals;
-
-          //.. add (x,y) points to list here, points are in reference to the vehicle's coordinate system
-          // the points in the simulator are connected by a Yellow line
-
+	  // send waypoint coordinates to simulator
           msgJson["next_x"] = next_x_vals;
           msgJson["next_y"] = next_y_vals;
 
@@ -141,6 +207,8 @@ int main() {
           // SUBMITTING.
           this_thread::sleep_for(chrono::milliseconds(100));
           ws.send(msg.data(), msg.length(), uWS::OpCode::TEXT);
+
+	  // clear mpc
         }
       } else {
         // Manual driving
