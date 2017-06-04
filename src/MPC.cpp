@@ -25,7 +25,7 @@ AD<double> polyeval(Eigen::VectorXd coeffs, AD<double> x) {
   return result;
 }
 
-// TODO: Set the timestep length and duration
+//Set the timestep length and duration
 size_t N = 12;
 double dt = 0.1;
 
@@ -67,7 +67,7 @@ class FG_eval {
 
   typedef CPPAD_TESTVECTOR(AD<double>) ADvector;
   void operator()(ADvector& fg, const ADvector& vars) {
-    // TODO: implement MPC
+    // implement MPC
     // fg a vector of constraints, x is a vector of constraints.
     // NOTE: You'll probably go back and forth between this function and
     // the Solver function below.
@@ -151,13 +151,10 @@ class FG_eval {
 
       fg[2 + x_start + i] = x1 - (x0 + v0 * CppAD::cos(psi0) * dt);
       fg[2 + y_start + i] = y1 - (y0 + v0 * CppAD::sin(psi0) * dt);
-      //fg[2 + psi_start + i] = psi1 - (psi0 + v0 * delta0 / Lf * dt);
       fg[2 + psi_start + i] = psi1 + v1 * delta0 / Lf * dt;
       fg[2 + v_start + i] = v1 - (v0 + a0 * dt);
-      fg[2 + cte_start + i] =
-          cte1 - ((f0 - y0) + (v0 * CppAD::sin(epsi0) * dt));
-      fg[2 + epsi_start + i] =
-          epsi1 - ((psi0 - psides0) + v0 * delta0 / Lf * dt);
+      fg[2 + cte_start + i] = cte1 - ((f0 - y0) + (v0 * CppAD::sin(epsi0) * dt));
+      fg[2 + epsi_start + i] = epsi1 - ((psi0 - psides0) + v0 * delta0 / Lf * dt);
     }
   }
 };
@@ -181,7 +178,7 @@ vector<double> MPC::Solve(Eigen::VectorXd state, Eigen::VectorXd coeffs, vector<
   double epsi = state[5];
 
 
-  // TODO: Set the number of model variables (includes both states and inputs).
+  // Set the number of model variables (includes both states and inputs).
   // For example: If the state is a 4 element vector, the actuators is a 2
   // element vector and there are 10 timesteps. The number of variables is:
   //
@@ -226,6 +223,8 @@ vector<double> MPC::Solve(Eigen::VectorXd state, Eigen::VectorXd coeffs, vector<
 
   // Acceleration/decceleration upper and lower limits.
   // NOTE: Feel free to change this to something else.
+  // Decceleration is set to 0.1 so that the car doesn't
+  // stop frequently
   for (int i = a_start; i < n_vars; i++) {
     vars_lowerbound[i] = 0.1;
     vars_upperbound[i] = 1.0;
@@ -290,7 +289,7 @@ vector<double> MPC::Solve(Eigen::VectorXd state, Eigen::VectorXd coeffs, vector<
   auto cost = solution.obj_value;
   std::cout << "Cost " << cost << std::endl;
 
-  // TODO: Return the first actuator values. The variables can be accessed with
+  // Return the first actuator values. The variables can be accessed with
   // `solution.x[i]`.
   //
   // {...} is shorthand for creating a vector, so auto x1 = {1.0,2.0}

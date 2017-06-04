@@ -141,42 +141,23 @@ int main() {
 	  auto coeffs = polyfit(ptsx_vec, ptsy_vec, POLY_ORDER);
 
 	  // calculate cte
-	  //double cte = polyeval(coeffs, px) - py;
 	  double cte = polyeval(coeffs, 0);
 
 	  // calculate epsi
-	  double epsi = epsi = psi - atan(polydereval(coeffs, 0));
-	  //double epsi = epsi = atan(polydereval(coeffs, 0));
+	  double epsi = psi - atan(polydereval(coeffs, 0));
 
-	  /*
-	  if( !is_state_init ){
-	    state << px, py, psi, v, cte, epsi;
-	    is_state_init = true;
-	  }
-	  */
-	  
-	  //state << 0, 0, 0, v, cte, epsi;
+	  // set up the state
 	  state << 0, 0, 0, v, cte, epsi;
 	  
-
           //Display the MPC predicted trajectory 
           vector<double> mpc_x_vals;
           vector<double> mpc_y_vals;
 	  
 	  // Solve the mpc optimization problem
+	  // and get mpc x and y values for plotting
 	  auto vars = mpc.Solve(state, coeffs, mpc_x_vals, mpc_y_vals);
 
-	  // store new state
-	  //state << vars[0], vars[1], vars[2], vars[3], vars[4], vars[5];
-
-
-          /*
-          * TODO: Calculate steeering angle and throttle using MPC.
-          *
-          * Both are in between [-1, 1].
-          *
-          */
-
+	  // get steering and throttle values from the solution
           double steer_value = vars[6];
           double throttle_value = vars[7];
 
@@ -208,7 +189,6 @@ int main() {
           this_thread::sleep_for(chrono::milliseconds(100));
           ws.send(msg.data(), msg.length(), uWS::OpCode::TEXT);
 
-	  // clear mpc
         }
       } else {
         // Manual driving
