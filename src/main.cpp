@@ -10,6 +10,19 @@
 #include "json.hpp"
 
 #define POLY_ORDER 3
+#define LATENCY 0.1
+
+// This value assumes the model presented in the classroom is used.
+//
+// It was obtained by measuring the radius formed by running the vehicle in the
+// simulator around in a circle with a constant steering angle and velocity on a
+// flat terrain.
+//
+// Lf was tuned until the the radius formed by the simulating the model
+// presented in the classroom matched the previous radius.
+//
+// This is the length from front to CoG that has a similar radius.
+const double Lf = 2.67;
 
 // for convenience
 using json = nlohmann::json;
@@ -122,7 +135,8 @@ int main() {
           double py = j[1]["y"];
           double psi = j[1]["psi"];
           double v = j[1]["speed"];
-
+	  double delta = j[1]["steering_angle"];
+	  
 	  //Display the waypoints/reference line
           vector<double> next_x_vals;
           vector<double> next_y_vals;
@@ -130,6 +144,10 @@ int main() {
           //.. add (x,y) points to list here, points are in reference to the vehicle's coordinate system
           // the points in the simulator are connected by a Yellow line
 	  transformToCarCoordinates(ptsx, ptsy, next_x_vals, next_y_vals, px, py, psi);
+
+	  // add latency to initial state
+	  px = v*LATENCY;
+	  psi = -v * delta * LATENCY / Lf;
 	  
 	  // convert to VectorXd for polyfit
 	  for(uint i = 0; i < next_x_vals.size(); i++){
@@ -141,13 +159,13 @@ int main() {
 	  auto coeffs = polyfit(ptsx_vec, ptsy_vec, POLY_ORDER);
 
 	  // calculate cte
-	  double cte = polyeval(coeffs, 0);
+	  double cte = polyeval(coeffs, px);
 
 	  // calculate epsi
-	  double epsi = psi - atan(polydereval(coeffs, 0));
+	  double epsi = atan(polydereval(coeffs, px));
 
 	  // set up the state
-	  state << 0, 0, 0, v, cte, epsi;
+	  state << px, 0.0, psi, v, cte, epsi;
 	  
           //Display the MPC predicted trajectory 
           vector<double> mpc_x_vals;
